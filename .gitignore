@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+# 运行产物
+*.db
+out/
+# 演示数据由 samples/generate_demo.py 生成
+samples/*.csv

@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fince-recon"
+version = "0.1.0"
+description = "资金对账工具：银行流水与财务凭证对账核销（余额勾稽 + 分层匹配 + 差异工单）"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+excel = ["openpyxl>=3.1"]
+ai = ["anthropic>=0.40"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+fince-recon = "fince_recon.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

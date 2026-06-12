@@ -1,0 +1,70 @@
+# fince-recon 配置文件（缺省时使用内置默认值，本文件即默认值的显式化）
+
+db_path = "recon.db"
+
+[matching]
+tolerance_cents = 50        # 金额容差 ±0.50 元，覆盖尾差与零星手续费
+subset_max_items = 8        # subset-sum 单组候选上限，防组合爆炸，超限转人工
+date_window_days = 5        # 第 2/3/4 层时间窗（天）
+fuzzy_threshold = 0.85      # 户名相似度阈值，低于不出建议
+fee_keywords = ["手续费", "利息", "账户管理费", "工本费", "汇划费", "结息"]
+
+[directions.bank]
+"收" = "IN"
+"付" = "OUT"
+"IN" = "IN"
+"OUT" = "OUT"
+
+[directions.voucher]   # 银行存款科目：借=资金流入，贷=资金流出
+"借" = "IN"
+"贷" = "OUT"
+"IN" = "IN"
+"OUT" = "OUT"
+
+[ai]
+enabled = true                                # 配置 ANTHROPIC_API_KEY 时真实调用，否则规则兜底
+fuzzy_model = "claude-haiku-4-5-20251001"     # 第 4 层语义模糊匹配：量大、单次简单
+attribution_model = "claude-sonnet-4-6"       # 差异归因一句话说明：需一定推理
+
+# 差异原因码路由表：新增原因码只改配置、不改代码
+[[routing]]
+reason = "FEE_INTEREST"
+label = "手续费/利息未入账"
+assignee = "财务共享"
+action = "补记凭证"
+
+[[routing]]
+reason = "BANK_ONLY"
+label = "银行已收/付、财务未记"
+assignee = "财务共享"
+action = "补凭证"
+
+[[routing]]
+reason = "FIN_ONLY"
+label = "财务已记、银行未到"
+assignee = "资金/业务"
+action = "核实在途，跨月结转"
+
+[[routing]]
+reason = "MISSING_DOC"
+label = "漏记/缺单"
+assignee = "业务部门"
+action = "补提单据"
+
+[[routing]]
+reason = "AMOUNT_MISMATCH"
+label = "金额错记"
+assignee = "财务共享"
+action = "红冲调整"
+
+[[routing]]
+reason = "CODE_ERROR"
+label = "对账码错/缺"
+assignee = "业务部门"
+action = "修正对账码"
+
+[[routing]]
+reason = "DIRECTION_ERROR"
+label = "方向异常"
+assignee = "财务共享"
+action = "核实方向映射"
