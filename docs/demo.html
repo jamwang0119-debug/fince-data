@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>资金对账工作台 · 离线演示</title>
+<style>
+  :root { --pri:#2c6e9e; --bg:#f5f7fa; --line:#dde3ea; --ok:#1a7f4b; --bad:#c0392b; --warn:#b8860b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Microsoft YaHei","PingFang SC",sans-serif; background:var(--bg); color:#222; }
+  .demobar { background:#fff7e6; color:#8a6d3b; padding:7px 20px; font-size:13px; border-bottom:1px solid #f0e0b0; }
+  header { background:var(--pri); color:#fff; padding:12px 20px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  header .sp { flex:1; }
+  header select,header input { padding:5px 8px; border-radius:5px; border:1px solid #fff6; background:#ffffff22; color:#fff; }
+  .tabs { display:flex; gap:2px; background:#fff; border-bottom:1px solid var(--line); padding:0 12px; flex-wrap:wrap; }
+  .tabs button { border:none; background:none; padding:12px 18px; cursor:pointer; font-size:14px; color:#555; border-bottom:3px solid transparent; }
+  .tabs button.active { color:var(--pri); border-bottom-color:var(--pri); font-weight:600; }
+  main { padding:18px 22px; max-width:1280px; margin:0 auto; }
+  .panel { display:none; } .panel.active { display:block; }
+  .kpis { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
+  .kpi { background:#fff; border:1px solid var(--line); border-radius:10px; padding:14px 20px; min-width:150px; }
+  .kpi b { display:block; font-size:26px; color:var(--pri); } .kpi span { color:#666; font-size:13px; }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:14px; }
+  .card h3{ margin:0 0 10px; font-size:15px; color:var(--pri); }
+  table { border-collapse:collapse; width:100%; background:#fff; font-size:13px; border:1px solid var(--line); }
+  th,td { border-bottom:1px solid var(--line); padding:7px 10px; text-align:left; }
+  th { background:#eef4f8; } tr:hover td { background:#f9fbfd; }
+  .tag { padding:1px 8px; border-radius:10px; font-size:12px; }
+  .tag.auto{background:#e6f4ec;color:var(--ok);} .tag.pending{background:#fdf3e0;color:var(--warn);}
+  .tag.confirmed{background:#e6f0f8;color:var(--pri);} .tag.cancelled{background:#f1f1f1;color:#888;}
+  .ok{color:var(--ok);font-weight:600;} .bad{color:var(--bad);font-weight:600;} .muted{color:#888;font-size:12px;}
+  button.sm { padding:3px 9px; font-size:12px; border-radius:4px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.sm.ok{color:var(--ok);border-color:var(--ok);} button.sm.bad{color:var(--bad);border-color:var(--bad);}
+  #toast{position:fixed;right:18px;bottom:18px;background:#222;color:#fff;padding:11px 16px;border-radius:8px;opacity:0;transition:.3s;font-size:13px;max-width:420px;}
+  #toast.show{opacity:.95;}
+</style>
+</head>
+<body>
+<div class="demobar">📄 离线演示版 · 内置示例数据 · 双击本文件即可打开，无需安装 · 所有操作仅在本页模拟，不影响真实数据。真实对账请用项目的 CLI/Web 工具。</div>
+<header>
+  <h1>资金对账工作台</h1>
+  <label>期间 <select id="period" onchange="reloadAll()"></select></label>
+  <span class="sp"></span>
+  <span style="font-size:13px;opacity:.85">演示员</span>
+</header>
+<div class="tabs">
+  <button class="active" onclick="tab('overview',this)">概览 · 调节表</button>
+  <button onclick="tab('matches',this)">核销记录</button>
+  <button onclick="tab('tickets',this)">差异工单</button>
+  <button onclick="tab('board',this)">工单看板</button>
+  <button onclick="tab('audit',this)">审计留痕</button>
+</div>
+<main>
+  <section id="overview" class="panel active">
+    <div class="kpis" id="kpis"></div>
+    <div class="card"><h3>银行存款余额调节表</h3><div id="stmt"></div></div>
+    <div class="card"><h3>余额勾稽校验</h3><div id="checks"></div></div>
+  </section>
+  <section id="matches" class="panel">
+    <div class="muted" style="margin-bottom:10px">建议核销可「确认/退回」；自动/已确认的可「反核销」。本页为模拟交互。</div>
+    <div id="mtable"></div>
+  </section>
+  <section id="tickets" class="panel"><div id="ttable"></div></section>
+  <section id="board" class="panel"><div class="card"><h3>工单看板（责任方 × 状态，未解决）</h3><div id="btable"></div></div></section>
+  <section id="audit" class="panel"><div class="card"><h3>审计留痕（自动 system / 人工记工号）</h3><div id="atable"></div></div></section>
+</main>
+<div id="toast"></div>
+<script>
+const DATA = {"periods": ["2026-05", "2026-06"], "by_period": {"2026-05": {"summary": {"period": "2026-05", "total_bank": 17, "matched_bank": 13, "rate_bank": 76.5, "total_fin": 21, "matched_fin": 15, "rate_fin": 71.4, "pending": 2, "auto_confirmed": 11, "unmatched_bank": 2, "unmatched_fin": 2, "open_tickets": 4, "total_tickets": 4, "statements": [{"account_no": "110060001234567", "stmt_close": "186103.67", "ledger_close": "168353.87", "bank_in_unbooked": "2800.00", "bank_out_unbooked": "950.00", "fin_in_pending": "5000.00", "fin_out_pending": "20900.00", "adjusted_stmt": "170203.67", "adjusted_ledger": "170203.87", "tolerance_total": "-0.20", "residual": "0.00", "balanced": true, "pending": 6, "has_balance": true}, {"account_no": "110060007654321", "stmt_close": "80000.00", "ledger_close": "80000.00", "bank_in_unbooked": "0.00", "bank_out_unbooked": "0.00", "fin_in_pending": "0.00", "fin_out_pending": "0.00", "adjusted_stmt": "80000.00", "adjusted_ledger": "80000.00", "tolerance_total": "0.00", "residual": "0.00", "balanced": true, "pending": 0, "has_balance": true}], "balance_checks": [{"account_no": "110060001234567", "side": "bank", "ok": true, "expected": "186103.67", "actual": "186103.67"}, {"account_no": "110060001234567", "side": "ledger", "ok": true, "expected": "168353.87", "actual": "168353.87"}, {"account_no": "110060007654321", "side": "bank", "ok": true, "expected": "80000.00", "actual": "80000.00"}, {"account_no": "110060007654321", "side": "ledger", "ok": true, "expected": "80000.00", "actual": "80000.00"}]}, "matches": [{"id": 13, "method": "模糊匹配", "confidence": "suggested", "status": "pending", "status_label": "建议核销(待确认)", "recon_code": "", "bank_total": "2500.00", "fin_total": "2500.00", "diff": "0.00", "explanation": "模糊匹配（相似度 1.00）。户名相似度 1.00，金额方向一致，建议核销（规则判定，需人工确认）。银行侧[流水号BK0520001 2026-05-20 2500.00元 IN 对手方:上海智云科技有限公司 摘要:咨询费] ↔ 凭证侧[凭", "created_by": "system"}, {"id": 12, "method": "凑数匹配", "confidence": "suggested", "status": "pending", "status_label": "建议核销(待确认)", "recon_code": "", "bank_total": "-900.00", "fin_total": "-900.00", "diff": "0.00", "explanation": "凑数匹配（1拖3）。户名相似度 1.00，金额方向一致，建议核销（规则判定，需人工确认）。银行侧[流水号BK0518001 2026-05-18 900.00元 OUT 对手方:深圳市鹏达供应链有限公司 摘要:材料款合并支付] ↔ 凭证侧[", "created_by": "system"}, {"id": 11, "method": "多字段精确", "confidence": "high", "status": "auto", "status_label": "自动核销", "recon_code": "", "bank_total": "-777.77", "fin_total": "-777.77", "diff": "0.00", "explanation": "", "created_by": "system"}, {"id": 10, "method": "多字段精确", "confidence": "high", "status": "auto", "status_label": "自动核销", "recon_code": "", "bank_total": "666.00", "fin_total": "666.00", "diff": "0.00", "explanation": "对账码不一致（银行:RC007 / 凭证:RC07），按强字段精确匹配救回，建议修正对账码", "created_by": "system"}, {"id": 9, "method": "多字段精确", "confidence": "high", "status": "auto", "status_label": "自动核销", "recon_code": "", "bank_total": "-1234.56", "fin_total": "-1234.56", "diff": "0.00", "explanation": "", "created_by": "system"}, {"id": 8, "method": "对账码1:1", "confidence": "high", "status": "auto", "status_label": "自动核销", "recon_code": "RC009", "bank_total": "30000.00", "fin_total": "30000.00", "diff": "0.00", "explanation": "", "created_by": "system"}, {"id": 7, "method": "对账码1:1", "confidence": "high", "status": "auto", "status_label": "自动核销", "recon_code": "RC008", "bank_total": "-30000.00", "fin_total": "-30000.00", "diff": "0.00", "explanation": "", "created_by": "system"}, {"id": 6, "method": "对账码分组轧差", "confidence": "high", "status": "auto", "status_label": "自动核销", "recon_code": "RC006", "bank_total": "1500.00", "fin_total": "1500.00", "diff": "0.00", "explanation": "", "created_by": "system"}, {"id": 5, "method": "组内部分核销", "confidence": "medium", "status": "auto", "status_label": "自动核销", "recon_code": "RC005", "bank_total": "500.00", "fin_total": "500.00", "diff": "0.00", "explanation": "组内子集轧平（subset-sum），部分核销，剩余挂账", "created_by": "system"}, {"id": 4, "method": "对账码容差核销", "confidence": "medium", "status": "auto", "status_label": "自动核销", "recon_code": "RC004", "bank_total": "-5000.00", "fin_total": "-4999.80", "diff": "-0.20", "explanation": "容差核销，差额 -0.20 元挂手续费/尾差调节项", "created_by": "system"}, {"id": 3, "method": "对账码分组轧差", "confidence": "medium", "status": "auto", "status_label": "自动核销", "recon_code": "RC003", "bank_total": "600.00", "fin_total": "600.00", "diff": "0.00", "explanation": "M:N 分组轧平核销，建议抽样复核", "created_by": "system"}, {"id": 2, "method": "对账码分组轧差", "confidence": "high", "status": "auto", "status_label": "自动核销", "recon_code": "RC002", "bank_total": "8000.00", "fin_total": "8000.00", "diff": "0.00", "explanation": "", "created_by": "system"}, {"id": 1, "method": "对账码1:1", "confidence": "high", "status": "auto", "status_label": "自动核销", "recon_code": "RC001", "bank_total": "10000.00", "fin_total": "10000.00", "diff": "0.00", "explanation": "", "created_by": "system"}], "tickets": [{"id": 1, "status": "待处理", "reason_label": "银行已收/付、财务未记", "reason_code": "BANK_ONLY", "assignee": "财务共享", "action": "补凭证", "diff": "300.00", "recon_code": "RC005", "ai_note": "系统初判为「银行已收/付、财务未记」，请按建议动作处理。差异金额 300.00 元；对账码 RC005；银行:流水号BK0513002 2026-05-13 300.00元 IN 对手方:西安长风机械有限公司 摘要:预付款补", "carried_to": "", "resolved": "", "period": "2026-05"}, {"id": 2, "status": "待处理", "reason_label": "手续费/利息未入账", "reason_code": "FEE_INTEREST", "assignee": "财务共享", "action": "补记凭证", "diff": "-50.00", "recon_code": "", "ai_note": "系统初判为「手续费/利息未入账」，请按建议动作处理。差异金额 -50.00 元；银行:流水号BK0531001 2026-05-31 50.00元 OUT 对手方:招商银行 摘要:账户手续费", "carried_to": "", "resolved": "", "period": "2026-05"}, {"id": 3, "status": "待处理", "reason_label": "财务已记、银行未到", "reason_code": "FIN_ONLY", "assignee": "资金/业务", "action": "核实在途，跨月结转", "diff": "-2500.00", "recon_code": "", "ai_note": "系统初判为「财务已记、银行未到」，请按建议动作处理。差异金额 -2500.00 元；凭证:凭证记-0520-02-1 2026-05-20 2500.00元 IN 往来:北方重工集团有限公司 摘要:收设备款", "carried_to": "", "resolved": "", "period": "2026-05"}, {"id": 4, "status": "待处理", "reason_label": "财务已记、银行未到", "reason_code": "FIN_ONLY", "assignee": "资金/业务", "action": "核实在途，跨月结转", "diff": "20000.00", "recon_code": "RC010", "ai_note": "系统初判为「财务已记、银行未到」，请按建议动作处理。差异金额 20000.00 元；对账码 RC010；凭证:凭证记-0531-01-1 2026-05-31 20000.00元 OUT 往来:重庆嘉陵建材有限公司 摘要:付材料款（在途）", "carried_to": "", "resolved": "", "period": "2026-05"}], "board": [{"assignee": "财务共享", "status": "待处理", "count": 2, "amount": "350.00"}, {"assignee": "资金/业务", "status": "待处理", "count": 2, "amount": "22500.00"}]}, "2026-06": {"summary": {"period": "2026-06", "total_bank": 2, "matched_bank": 1, "rate_bank": 50.0, "total_fin": 1, "matched_fin": 1, "rate_fin": 100.0, "pending": 0, "auto_confirmed": 1, "unmatched_bank": 1, "unmatched_fin": 0, "open_tickets": 1, "total_tickets": 1, "statements": [{"account_no": "110060001234567", "stmt_close": "167103.67", "ledger_close": "169353.87", "bank_in_unbooked": "0.00", "bank_out_unbooked": "20000.00", "fin_in_pending": "0.00", "fin_out_pending": "0.00", "adjusted_stmt": "167103.67", "adjusted_ledger": "149353.87", "tolerance_total": "-0.20", "residual": "17750.00", "balanced": false, "pending": 0, "has_balance": true}, {"account_no": "110060007654321", "stmt_close": "80000.00", "ledger_close": "80000.00", "bank_in_unbooked": "0.00", "bank_out_unbooked": "0.00", "fin_in_pending": "0.00", "fin_out_pending": "0.00", "adjusted_stmt": "80000.00", "adjusted_ledger": "80000.00", "tolerance_total": "0.00", "residual": "0.00", "balanced": true, "pending": 0, "has_balance": true}], "balance_checks": [{"account_no": "110060001234567", "side": "bank", "ok": true, "expected": "167103.67", "actual": "167103.67"}, {"account_no": "110060001234567", "side": "ledger", "ok": true, "expected": "169353.87", "actual": "169353.87"}, {"account_no": "110060007654321", "side": "bank", "ok": true, "expected": "80000.00", "actual": "80000.00"}, {"account_no": "110060007654321", "side": "ledger", "ok": true, "expected": "80000.00", "actual": "80000.00"}]}, "matches": [{"id": 14, "method": "对账码1:1", "confidence": "high", "status": "auto", "status_label": "自动核销", "recon_code": "RC101", "bank_total": "1000.00", "fin_total": "1000.00", "diff": "0.00", "explanation": "", "created_by": "system"}], "tickets": [{"id": 5, "status": "待处理", "reason_label": "对账码错/缺", "reason_code": "CODE_ERROR", "assignee": "业务部门", "action": "修正对账码", "diff": "-20000.00", "recon_code": "RC010", "ai_note": "系统初判为「对账码错/缺」，请按建议动作处理。差异金额 -20000.00 元；对账码 RC010；银行:流水号BK0602001 2026-06-02 20000.00元 OUT 对手方:重庆嘉陵建材有限公司 摘要:材料款", "carried_to": "", "resolved": "", "period": "2026-06"}], "board": [{"assignee": "业务部门", "status": "待处理", "count": 1, "amount": "20000.00"}]}}, "audit": [{"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "batch_run", "object_type": "batch", "object_id": "2", "detail": "{\"scope_bank\": 2, \"scope_fin\": 1, \"match_code_1_1\": 1, \"matched_bank\": 1, \"matched_fin\": 1, \"suggested\": 0, \"tickets_autoclosed\": 0, \"tickets_created\": 1, \"unmatched_bank\": 1, \"unmatched_fin\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "ticket_create", "object_type": "ticket", "object_id": "5", "detail": "{\"reason\": \"CODE_ERROR\", \"assignee\": \"业务部门\", \"diff\": -2000000}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "14", "detail": "{\"method\": \"code_1_1\", \"confidence\": \"high\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "import_balances", "object_type": "file", "object_id": "/home/user/fince-data/samples/balances_2026-06.csv", "detail": "{\"period\": \"2026-06\"}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "import_vouchers", "object_type": "file", "object_id": "/home/user/fince-data/samples/vouchers_2026-06.csv", "detail": "{\"period\": \"2026-06\", \"inserted\": 1, \"dup\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "import_bank", "object_type": "file", "object_id": "/home/user/fince-data/samples/bank_2026-06.csv", "detail": "{\"period\": \"2026-06\", \"inserted\": 2, \"dup\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "batch_run", "object_type": "batch", "object_id": "1", "detail": "{\"scope_bank\": 17, \"scope_fin\": 21, \"match_code_1_1\": 3, \"matched_bank\": 13, \"matched_fin\": 15, \"suggested\": 2, \"match_code_group\": 3, \"match_code_tolerance\": 1, \"match_code_partial\": 1, \"match_exact\": 3, \"match_subset_sum\": 1, \"match_fuzzy\": 1, \"tickets_autoclosed\": 0, \"tickets_created\": 4, \"unmatched_bank\": 2, \"unmatched_fin\": 2}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "ticket_create", "object_type": "ticket", "object_id": "4", "detail": "{\"reason\": \"FIN_ONLY\", \"assignee\": \"资金/业务\", \"diff\": 2000000}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "ticket_create", "object_type": "ticket", "object_id": "3", "detail": "{\"reason\": \"FIN_ONLY\", \"assignee\": \"资金/业务\", \"diff\": -250000}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "ticket_create", "object_type": "ticket", "object_id": "2", "detail": "{\"reason\": \"FEE_INTEREST\", \"assignee\": \"财务共享\", \"diff\": -5000}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "ticket_create", "object_type": "ticket", "object_id": "1", "detail": "{\"reason\": \"BANK_ONLY\", \"assignee\": \"财务共享\", \"diff\": 30000}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "13", "detail": "{\"method\": \"fuzzy\", \"confidence\": \"suggested\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "12", "detail": "{\"method\": \"subset_sum\", \"confidence\": \"suggested\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "11", "detail": "{\"method\": \"exact\", \"confidence\": \"high\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "10", "detail": "{\"method\": \"exact\", \"confidence\": \"high\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "9", "detail": "{\"method\": \"exact\", \"confidence\": \"high\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "8", "detail": "{\"method\": \"code_1_1\", \"confidence\": \"high\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "7", "detail": "{\"method\": \"code_1_1\", \"confidence\": \"high\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "6", "detail": "{\"method\": \"code_group\", \"confidence\": \"high\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "5", "detail": "{\"method\": \"code_partial\", \"confidence\": \"medium\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "4", "detail": "{\"method\": \"code_tolerance\", \"confidence\": \"medium\", \"diff\": -20}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "3", "detail": "{\"method\": \"code_group\", \"confidence\": \"medium\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "2", "detail": "{\"method\": \"code_group\", \"confidence\": \"high\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "match_create", "object_type": "match", "object_id": "1", "detail": "{\"method\": \"code_1_1\", \"confidence\": \"high\", \"diff\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "import_balances", "object_type": "file", "object_id": "/home/user/fince-data/samples/balances_2026-05.csv", "detail": "{\"period\": \"2026-05\"}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "import_vouchers", "object_type": "file", "object_id": "/home/user/fince-data/samples/vouchers_2026-05.csv", "detail": "{\"period\": \"2026-05\", \"inserted\": 21, \"dup\": 0}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "import_bank", "object_type": "file", "object_id": "/home/user/fince-data/samples/bank_2026-05.csv", "detail": "{\"period\": \"2026-05\", \"inserted\": 17, \"dup\": 1}"}, {"at": "2026-06-13T15:56:38+00:00", "actor": "system", "action": "import_accounts", "object_type": "file", "object_id": "/home/user/fince-data/samples/accounts.csv", "detail": "{\"inserted\": 2}"}]};
+const $=id=>document.getElementById(id);
+function P(){return $('period').value;}
+function cur(){return DATA.by_period[P()];}
+function toast(m,bad){const t=$('toast');t.textContent=m;t.className='show';t.style.background=bad?'#a33':'#222';setTimeout(()=>t.className='',3000);}
+function tab(id,btn){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));$(id).classList.add('active');
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');render();}
+
+function kpis(){const c=cur(),s=c.summary;
+  const pending=c.matches.filter(m=>m.status==='pending').length;
+  const auto=c.matches.filter(m=>m.status==='auto'||m.status==='confirmed').length;
+  const openT=c.tickets.filter(t=>t.status!=='已解决').length;
+  return [['银行核销率',s.rate_bank+'%',`${s.matched_bank}/${s.total_bank} 笔`],
+    ['凭证核销率',s.rate_fin+'%',`${s.matched_fin}/${s.total_fin} 行`],
+    ['生效核销',auto,'笔'],['建议待确认',pending,'笔'],
+    ['未匹配',s.unmatched_bank+' / '+s.unmatched_fin,'银行/凭证'],
+    ['未解决工单',openT,'共 '+c.tickets.length+' 张']];
+}
+function render(){
+  const a=document.querySelector('.panel.active').id, c=cur();
+  if(a==='overview'){
+    $('kpis').innerHTML=kpis().map(k=>`<div class="kpi"><b>${k[1]}</b><span>${k[0]} · ${k[2]}</span></div>`).join('');
+    let h='<table><tr><th>账号</th><th>对账单期末</th><th>+企业已收银行未收</th><th>−企业已付银行未付</th><th>调节后对账单</th><th>账面期末</th><th>+银行已收企业未收</th><th>−银行已付企业未付</th><th>调节后账面</th><th>容差差额</th><th>未解释差异</th><th>校验</th></tr>';
+    c.summary.statements.forEach(s=>{h+=`<tr><td>${s.account_no}</td>`+(s.has_balance?
+      `<td>${s.stmt_close}</td><td>${s.fin_in_pending}</td><td>${s.fin_out_pending}</td><td>${s.adjusted_stmt}</td><td>${s.ledger_close}</td><td>${s.bank_in_unbooked}</td><td>${s.bank_out_unbooked}</td><td>${s.adjusted_ledger}</td><td>${s.tolerance_total}</td><td>${s.residual}</td><td>${s.balanced?'<span class=ok>✓ 平衡</span>':'<span class=bad>✗ 未解释</span>'}</td>`
+      :`<td colspan=11 class=muted>未导入余额表</td>`)+'</tr>';});
+    $('stmt').innerHTML=h+'</table>';
+    $('checks').innerHTML=c.summary.balance_checks.length?('<table><tr><th>账号</th><th>侧</th><th>应等于期末</th><th>实际期末</th><th>结果</th></tr>'+
+      c.summary.balance_checks.map(r=>`<tr><td>${r.account_no}</td><td>${r.side==='bank'?'银行对账单':'账面'}</td><td>${r.expected}</td><td>${r.actual}</td><td>${r.ok?'<span class=ok>✓</span>':'<span class=bad>✗</span>'}</td></tr>`).join('')+'</table>'):'<span class=muted>无</span>';
+  }
+  if(a==='matches'){let h='<table><tr><th>ID</th><th>方式</th><th>置信度</th><th>状态</th><th>对账码</th><th>银行合计</th><th>凭证合计</th><th>差额</th><th>说明</th><th>操作</th></tr>';
+    c.matches.forEach(m=>{let btn='';
+      if(m.status==='pending')btn=`<button class="sm ok" onclick="cf(${m.id})">确认</button> <button class="sm bad" onclick="rj(${m.id})">退回</button>`;
+      else if(m.status==='auto'||m.status==='confirmed')btn=`<button class="sm bad" onclick="um(${m.id})">反核销</button>`;
+      h+=`<tr><td>${m.id}</td><td>${m.method}</td><td>${m.confidence}</td><td><span class="tag ${m.status}">${m.status_label}</span></td><td>${m.recon_code}</td><td>${m.bank_total}</td><td>${m.fin_total}</td><td>${m.diff}</td><td class=muted>${m.explanation}</td><td>${btn}</td></tr>`;});
+    $('mtable').innerHTML=h+'</table>';}
+  if(a==='tickets'){const NEXT={'待派单':['待处理'],'待处理':['处理中','已结转'],'处理中':['待复核','已结转'],'待复核':['已解决','处理中'],'已结转':['已解决']};
+    let h='<table><tr><th>ID</th><th>状态</th><th>原因</th><th>责任方</th><th>建议动作</th><th>差异金额</th><th>对账码</th><th>AI 归因</th><th>流转</th></tr>';
+    c.tickets.forEach(t=>{let mv=(NEXT[t.status]||[]).map(s=>`<button class="sm" onclick="mt(${t.id},'${s}')">${s}</button>`).join(' ');
+      h+=`<tr><td>${t.id}</td><td>${t.status}</td><td>${t.reason_label}</td><td>${t.assignee}</td><td>${t.action}</td><td>${t.diff}</td><td>${t.recon_code}</td><td class=muted>${t.ai_note||t.resolved}</td><td>${mv}</td></tr>`;});
+    $('ttable').innerHTML=h+'</table>';}
+  if(a==='board'){const open=c.tickets.filter(t=>t.status!=='已解决');const agg={};
+    open.forEach(t=>{const k=t.assignee+'|'+t.status;agg[k]=(agg[k]||0)+1;});
+    $('btable').innerHTML=Object.keys(agg).length?('<table><tr><th>责任方</th><th>状态</th><th>数量</th></tr>'+Object.entries(agg).map(([k,v])=>{const[a,s]=k.split('|');return `<tr><td>${a}</td><td>${s}</td><td>${v}</td></tr>`;}).join('')+'</table>'):'<p class=muted>无未解决工单</p>';}
+  if(a==='audit'){$('atable').innerHTML='<table><tr><th>时间</th><th>操作人</th><th>动作</th><th>对象</th><th>详情</th></tr>'+DATA.audit.map(r=>`<tr><td>${r.at}</td><td>${r.actor}</td><td>${r.action}</td><td>${r.object_type} ${r.object_id||''}</td><td class=muted>${(r.detail||'').slice(0,70)}</td></tr>`).join('')+'</table>';}
+}
+function reloadAll(){render();}
+function logAudit(actor,action,obj,id){DATA.audit.unshift({at:new Date().toISOString().slice(0,19),actor,action,object_type:obj,object_id:id,detail:'（演示模拟）'});}
+function cf(id){const m=cur().matches.find(x=>x.id===id);m.status='confirmed';m.status_label='已确认核销';logAudit('演示员','match_confirm','match',id);toast('核销 '+id+' 已确认（模拟）');render();}
+function rj(id){const m=cur().matches.find(x=>x.id===id);m.status='cancelled';m.status_label='已撤销';logAudit('演示员','match_reject','match',id);toast('核销 '+id+' 已退回（模拟）');render();}
+function um(id){const m=cur().matches.find(x=>x.id===id);m.status='cancelled';m.status_label='已撤销';logAudit('演示员','match_unmatch','match',id);toast('核销 '+id+' 已反核销（模拟）');render();}
+function mt(id,to){const t=cur().tickets.find(x=>x.id===id);if(to==='处理中'&&t.status==='待复核'){if(!prompt('退回原因？'))return;}t.status=to;logAudit('演示员','ticket_move','ticket',id);toast('工单 '+id+' → '+to+'（模拟）');render();}
+
+(function boot(){const sel=$('period');DATA.periods.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;sel.appendChild(o);});render();})();
+</script>
+</body>
+</html>
