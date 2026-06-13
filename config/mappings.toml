@@ -1,0 +1,64 @@
+# 真实导出 → 标准中间表 的字段映射配置
+#
+# 用法：fince-recon import bank|vouchers <真实文件> --period P --mapping <名字>
+# 每个 [mappings.<名字>] 描述一类导出文件的列如何对应到工具标准字段。
+# 按列名匹配，与列顺序无关；改了源系统导出格式只需改这里，不动代码。
+#
+# 下面三个配置对应常见的「资金系统 + 银企直联」导出：
+#   bank_c        银行流水（收入/支出双列，对账码在独立列、× 表示无码）
+#   fund_payment  资金系统-付款/出账明细（对账码藏在摘要/备注里 CC0006...）
+#   fund_receipt  资金系统-收款/入账明细（同上）
+# 账务侧（付款+收款）都映射为 voucher，两份文件分别导入到同一期间即可。
+
+[mappings.bank_c]
+side = "bank"
+account_col = "账户"
+account_name_col = "组织"
+bank_name_col = "开户银行"
+date_col = "交易日期"
+summary_col = "用途"
+memo_col = "备注"
+counterparty_name_col = "对方户名"
+counterparty_account_col = "对方账户"
+amount_mode = "in_out"          # 收入/支出 双列
+amount_in_col = "收入"
+amount_out_col = "支出"
+code_col = "对账码"             # 独立对账码列
+code_from = ["对账码", "用途", "备注"]
+code_regex = "CC[0-9A-Z]{6,10}"
+empty_markers = ["×", "x", "X", "-", "无", ""]
+uid_hash = ["账户", "交易日期时间", "收入", "支出", "当前余额", "备注"]  # 无银行流水号，哈希生成稳定唯一键
+
+[mappings.fund_payment]
+side = "voucher"
+account_col = "银行账号"
+account_name_col = "资金组织"
+bank_name_col = "开户银行"
+date_col = "交易时间"
+summary_col = "摘要"
+memo_col = "备注"
+counterparty_name_col = "对方户名"
+amount_mode = "single"
+amount_col = "付款金额"
+direction_fixed = "OUT"         # 付款=出账
+code_from = ["摘要", "备注"]    # 对账码藏在文本里
+code_regex = "CC[0-9A-Z]{6,10}"
+uid_col = "交易明细编号"        # MX-... 全局唯一
+voucher_no_col = "凭证号"       # 真实记账凭证号，存入「关联业务单号」便于审计
+
+[mappings.fund_receipt]
+side = "voucher"
+account_col = "银行账号"
+account_name_col = "资金组织"
+bank_name_col = "开户银行"
+date_col = "交易时间"
+summary_col = "摘要"
+memo_col = "备注"
+counterparty_name_col = "对方户名"
+amount_mode = "single"
+amount_col = "收款金额"
+direction_fixed = "IN"          # 收款=入账
+code_from = ["摘要", "备注"]
+code_regex = "CC[0-9A-Z]{6,10}"
+uid_col = "交易明细编号"
+voucher_no_col = "凭证号"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from datetime import date
+from datetime import date, datetime
 
 # 公司名中不影响主体识别的修饰词，相似度比较前剔除
 _COMPANY_NOISE = re.compile(
@@ -26,9 +26,20 @@ def map_direction(raw: str, mapping: dict[str, str]) -> str:
     return mapping[key]
 
 
-def parse_date(raw: str) -> str:
-    """解析日期为 ISO 格式 YYYY-MM-DD。支持 2026/6/1、20260601、2026-06-01。"""
-    s = str(raw).strip().replace("/", "-").replace(".", "-")
+def parse_date(raw) -> str:
+    """解析日期为 ISO 格式 YYYY-MM-DD。
+
+    支持 datetime/date 对象、2026/6/1、20260601、2026-06-01，
+    以及带时分秒的 2026-06-03 11:00:14 / 2026-06-03T11:00:14。
+    """
+    if isinstance(raw, datetime):
+        return raw.date().isoformat()
+    if isinstance(raw, date):
+        return raw.isoformat()
+    s = str(raw).strip()
+    # 去掉时间部分（空格或 T 分隔）
+    s = re.split(r"[ T]", s, maxsplit=1)[0]
+    s = s.replace("/", "-").replace(".", "-")
     if re.fullmatch(r"\d{8}", s):
         s = f"{s[:4]}-{s[4:6]}-{s[6:]}"
     m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
@@ -36,6 +47,18 @@ def parse_date(raw: str) -> str:
         raise ValueError(f"日期无法解析: {raw!r}")
     y, mo, d = (int(g) for g in m.groups())
     return date(y, mo, d).isoformat()
+
+
+def find_code(pattern: str, *values) -> str:
+    """按优先级在多个文本中用正则提取对账码，返回第一个命中。"""
+    rx = re.compile(pattern)
+    for v in values:
+        if v is None:
+            continue
+        m = rx.search(str(v))
+        if m:
+            return m.group(0)
+    return ""
 
 
 def norm_name(raw: str | None) -> str:

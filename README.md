@@ -50,6 +50,34 @@ python3 -m fince_recon report --period 2026-06     # 调节表 + HTML 报告
 数据模板见 `templates/`（CSV 表头中文，UTF-8，亦支持 .xlsx 需安装 openpyxl）；
 参数与原因码路由配置见 `config/recon.toml`。
 
+## 接入真实银企/资金系统导出（字段映射适配）
+
+真实导出与标准模板常有差异（金额收入/支出双列、对账码藏在摘要/备注里如 `CC0006...`、
+日期带时分秒、银行流水无单号、账务侧分付款/收款两份文件）。无需改代码，只在
+`config/mappings.toml` 里描述「真实列名 → 标准字段」即可：
+
+```bash
+export PYTHONPATH=src
+# 1) 从真实文件自动扫描账户主数据（科目编码取默认值，可再 accounts import 覆盖）
+python3 -m fince_recon accounts scan 银行流水.xlsx --mapping bank_c
+python3 -m fince_recon accounts scan 付款明细.xlsx --mapping fund_payment
+python3 -m fince_recon accounts scan 收款明细.xlsx --mapping fund_receipt
+# 2) 开期间并按映射导入（自动收入/支出转方向、正则提取对账码、哈希生成银行唯一号）
+python3 -m fince_recon period open 2026-06
+python3 -m fince_recon import bank     银行流水.xlsx --period 2026-06 --mapping bank_c
+python3 -m fince_recon import vouchers 付款明细.xlsx --period 2026-06 --mapping fund_payment
+python3 -m fince_recon import vouchers 收款明细.xlsx --period 2026-06 --mapping fund_receipt
+# 3) 匹配 + 报告
+python3 -m fince_recon run    --period 2026-06
+python3 -m fince_recon report --period 2026-06
+
+# 或一键：bash samples/run_real.sh 银行流水.xlsx 付款明细.xlsx 收款明细.xlsx 2026-06
+```
+
+内置三个映射 `bank_c`（银行流水，收入/支出双列+对账码列）、`fund_payment`（资金付款侧）、
+`fund_receipt`（资金收款侧）已按常见「资金系统 + 银企直联」导出配好，按需改列名即可。
+说明：账务侧以「交易明细编号」作唯一键、真实「凭证号」存入关联业务单号字段便于审计追溯。
+
 ## 测试
 
 ```bash

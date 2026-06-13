@@ -83,9 +83,11 @@ def _get(row: dict[str, str], *names: str, required: bool = False) -> str:
     return ""
 
 
-def import_accounts(conn: sqlite3.Connection, path: str) -> ImportReport:
+def import_accounts(
+    conn: sqlite3.Connection, path: str, rows: list[dict] | None = None
+) -> ImportReport:
     rep = ImportReport(path, "账户主数据")
-    for i, row in enumerate(read_rows(path), start=2):
+    for i, row in enumerate(rows if rows is not None else read_rows(path), start=2):
         try:
             no = _get(row, "账号", required=True)
             conn.execute(
@@ -137,13 +139,17 @@ def _own_accounts(conn: sqlite3.Connection) -> dict[str, str]:
 
 
 def import_bank(
-    conn: sqlite3.Connection, path: str, period: str, cfg: Config
+    conn: sqlite3.Connection,
+    path: str,
+    period: str,
+    cfg: Config,
+    rows: list[dict] | None = None,
 ) -> ImportReport:
     require_open_period(conn, period)
     rep = ImportReport(path, "银行流水")
     own = _own_accounts(conn)
     seen: set[tuple[str, str]] = set()
-    for i, row in enumerate(read_rows(path), start=2):
+    for i, row in enumerate(rows if rows is not None else read_rows(path), start=2):
         try:
             account_no = _get(row, "账号", "本方账号", required=True)
             if account_no not in own:
@@ -199,14 +205,18 @@ def import_bank(
 
 
 def import_vouchers(
-    conn: sqlite3.Connection, path: str, period: str, cfg: Config
+    conn: sqlite3.Connection,
+    path: str,
+    period: str,
+    cfg: Config,
+    rows: list[dict] | None = None,
 ) -> ImportReport:
     require_open_period(conn, period)
     rep = ImportReport(path, "财务凭证")
     own = _own_accounts(conn)
     ledger_to_account = {v: k for k, v in own.items() if v}
     seen: set[tuple[str, int]] = set()
-    for i, row in enumerate(read_rows(path), start=2):
+    for i, row in enumerate(rows if rows is not None else read_rows(path), start=2):
         try:
             status_raw = _get(row, "凭证状态") or "正常"
             if status_raw == "作废":

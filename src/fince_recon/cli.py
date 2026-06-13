@@ -31,8 +31,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("init", help="初始化数据库")
 
     sp = sub.add_parser("accounts", help="账户主数据")
-    sp.add_argument("action", choices=["import", "list"])
+    sp.add_argument("action", choices=["import", "list", "scan"])
     sp.add_argument("file", nargs="?")
+    sp.add_argument("--mapping", help="scan：真实文件的映射名")
+    sp.add_argument("--mapping-file", help="映射配置路径")
 
     sp = sub.add_parser("aliases", help="别名表")
     sp.add_argument("action", choices=["import"])
@@ -47,6 +49,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("kind", choices=["bank", "vouchers", "balances"])
     sp.add_argument("file")
     sp.add_argument("--period", required=True)
+    sp.add_argument("--mapping", help="真实导出文件的字段映射名（见 config/mappings.toml）")
+    sp.add_argument("--mapping-file", help="映射配置路径（默认 config/mappings.toml）")
 
     sp = sub.add_parser("check", help="余额勾稽与数据质量校验")
     sp.add_argument("--period", required=True)
@@ -122,6 +126,17 @@ def main(argv: list[str] | None = None) -> int:
             if not args.file:
                 raise SystemExit("用法: fince-recon accounts import accounts.csv")
             print(importer.import_accounts(conn, args.file).summary())
+        elif args.action == "scan":
+            if not args.file or not args.mapping:
+                raise SystemExit("用法: fince-recon accounts scan <真实文件> --mapping <名字>")
+            from fince_recon import adapter
+
+            mappings = adapter.load_mappings(args.mapping_file)
+            if args.mapping not in mappings:
+                raise SystemExit(f"映射 {args.mapping!r} 不存在，可选: {sorted(mappings)}")
+            rows = adapter.distinct_accounts(args.file, mappings[args.mapping])
+            print(importer.import_accounts(conn, args.file, rows=rows).summary())
+            print("  注：科目编码取默认值，请按需用 accounts import 覆盖修正")
         else:
             for r in conn.execute("SELECT * FROM accounts ORDER BY account_no"):
                 print(f"  {r['account_no']}  {r['account_name'] or '-'}  "
@@ -171,6 +186,28 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.cmd == "import":
+        if args.mapping:
+            from fince_recon import adapter
+
+            mappings = adapter.load_mappings(args.mapping_file)
+            if args.mapping not in mappings:
+                raise SystemExit(
+                    f"映射 {args.mapping!r} 不存在，可选: {sorted(mappings)}"
+                )
+            m = mappings[args.mapping]
+            kind, rows, skipped = adapter.adapt(args.file, m)
+            if kind != args.kind:
+                raise SystemExit(
+                    f"映射 {args.mapping} 的 side={m.side}，应配合 import {kind}，而非 {args.kind}"
+                )
+            if skipped:
+                print(f"（适配 {args.mapping}：跳过 {skipped} 行无金额/无效行）")
+            if kind == "bank":
+                rep = importer.import_bank(conn, args.file, args.period, cfg, rows=rows)
+            else:
+                rep = importer.import_vouchers(conn, args.file, args.period, cfg, rows=rows)
+            print(rep.summary())
+            return 0
         fn = {
             "bank": lambda: importer.import_bank(conn, args.file, args.period, cfg),
             "vouchers": lambda: importer.import_vouchers(conn, args.file, args.period, cfg),
