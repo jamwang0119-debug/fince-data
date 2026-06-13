@@ -15,7 +15,14 @@ CLI + SQLite 形态，核心零第三方依赖（Python ≥ 3.11 标准库即可
 
 ## Web 界面（浏览器操作 / 演示）
 
-零额外依赖（纯标准库），一条命令本机启动，浏览器打开即可操作：
+**最简单：双击启动（无需敲命令）**
+- macOS / Linux：双击 **`start.command`**（首次若提示无法打开，右键 → 打开 一次）
+- Windows：双击 **`start.bat`**
+
+脚本会自动装依赖、起服务、开浏览器到 `http://127.0.0.1:8000`，首页点右上「⚡ 加载演示数据」即可演示。
+（前提：电脑已装 Python 3.11+；没装会有提示去 https://www.python.org/downloads/ 下载，Windows 安装时勾选 “Add Python to PATH”。）
+
+**或手动一条命令：**
 
 ```bash
 export PYTHONPATH=src          # 或 pip install -e .
