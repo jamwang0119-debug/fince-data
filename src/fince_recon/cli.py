@@ -108,6 +108,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("status", help="期间对账状态摘要")
     sp.add_argument("--period", required=True)
+
+    sp = sub.add_parser("serve", help="启动 Web 界面（浏览器操作/演示）")
+    sp.add_argument("--host", default="127.0.0.1")
+    sp.add_argument("--port", type=int, default=8000)
     return p
 
 
@@ -395,6 +399,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "status":
         print(console_summary(conn, args.period))
+        return 0
+
+    if args.cmd == "serve":
+        from fince_recon.web import serve
+
+        conn.close()
+        serve(db_path, cfg, args.host, args.port)
         return 0
 
     return 0

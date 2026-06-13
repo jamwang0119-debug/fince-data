@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>资金对账工作台 · fince-recon</title>
+<style>
+  :root { --pri:#2c6e9e; --bg:#f5f7fa; --line:#dde3ea; --ok:#1a7f4b; --bad:#c0392b; --warn:#b8860b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Microsoft YaHei","PingFang SC",sans-serif; background:var(--bg); color:#222; }
+  header { background:var(--pri); color:#fff; padding:12px 20px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  header .sp { flex:1; }
+  header input, header select { padding:5px 8px; border-radius:5px; border:1px solid #fff6; background:#ffffff22; color:#fff; }
+  header input::placeholder { color:#fff9; }
+  header label { font-size:13px; opacity:.9; }
+  .tabs { display:flex; gap:2px; background:#fff; border-bottom:1px solid var(--line); padding:0 12px; flex-wrap:wrap; }
+  .tabs button { border:none; background:none; padding:12px 18px; cursor:pointer; font-size:14px; color:#555; border-bottom:3px solid transparent; }
+  .tabs button.active { color:var(--pri); border-bottom-color:var(--pri); font-weight:600; }
+  main { padding:18px 22px; max-width:1280px; margin:0 auto; }
+  .panel { display:none; }
+  .panel.active { display:block; }
+  .kpis { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
+  .kpi { background:#fff; border:1px solid var(--line); border-radius:10px; padding:14px 20px; min-width:150px; }
+  .kpi b { display:block; font-size:26px; color:var(--pri); }
+  .kpi span { color:#666; font-size:13px; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }
+  button.act { background:var(--pri); color:#fff; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px; }
+  button.act.ghost { background:#fff; color:var(--pri); border:1px solid var(--pri); }
+  button.sm { padding:3px 9px; font-size:12px; border-radius:4px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.sm.ok { color:var(--ok); border-color:var(--ok); }
+  button.sm.bad { color:var(--bad); border-color:var(--bad); }
+  table { border-collapse:collapse; width:100%; background:#fff; font-size:13px; border:1px solid var(--line); }
+  th,td { border-bottom:1px solid var(--line); padding:7px 10px; text-align:left; }
+  th { background:#eef4f8; position:sticky; top:0; }
+  tr:hover td { background:#f9fbfd; }
+  .tag { padding:1px 8px; border-radius:10px; font-size:12px; }
+  .tag.auto{background:#e6f4ec;color:var(--ok);} .tag.pending{background:#fdf3e0;color:var(--warn);}
+  .tag.confirmed{background:#e6f0f8;color:var(--pri);} .tag.cancelled{background:#f1f1f1;color:#888;}
+  .ok{color:var(--ok);font-weight:600;} .bad{color:var(--bad);font-weight:600;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px;}
+  .card h3{margin:0 0 10px;font-size:15px;color:var(--pri);}
+  .muted{color:#888;font-size:12px;}
+  #toast{position:fixed;right:18px;bottom:18px;background:#222;color:#fff;padding:11px 16px;border-radius:8px;opacity:0;transition:.3s;max-width:420px;font-size:13px;}
+  #toast.show{opacity:.95;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .imp{border:1px dashed var(--line);border-radius:8px;padding:12px;margin-bottom:10px;}
+  .imp h4{margin:0 0 8px;font-size:14px;}
+  select,input[type=text]{padding:5px 8px;border:1px solid var(--line);border-radius:5px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>资金对账工作台</h1>
+  <label>期间 <select id="period" onchange="reloadAll()"></select></label>
+  <label>操作人 <input id="actor" type="text" value="演示员" style="width:90px"></label>
+  <span class="sp"></span>
+  <button class="act ghost" onclick="seedDemo()">⚡ 加载演示数据</button>
+</header>
+
+<div class="tabs">
+  <button class="active" onclick="tab('overview',this)">概览 · 调节表</button>
+  <button onclick="tab('matches',this)">核销记录</button>
+  <button onclick="tab('tickets',this)">差异工单</button>
+  <button onclick="tab('board',this)">工单看板</button>
+  <button onclick="tab('import',this)">数据导入</button>
+  <button onclick="tab('audit',this)">审计留痕</button>
+</div>
+
+<main>
+  <!-- 概览 -->
+  <section id="overview" class="panel active">
+    <div class="bar">
+      <button class="act" onclick="op('check',{period:P()})">余额勾稽</button>
+      <button class="act" onclick="op('run',{period:P()})">▶ 执行对账</button>
+      <button class="act ghost" onclick="op('report',{period:P()})">导出报告(CSV/HTML)</button>
+      <input id="newperiod" type="text" placeholder="如 2026-07" style="width:110px">
+      <button class="act ghost" onclick="openPeriod()">新建期间</button>
+      <button class="act ghost" onclick="op('period_close',{period:P()})">关账</button>
+      <input id="carryto" type="text" placeholder="结转到 2026-07" style="width:130px">
+      <button class="act ghost" onclick="op('carryover',{from:P(),to:val('carryto')})">跨月结转</button>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="card"><h3>银行存款余额调节表</h3><div id="stmt"></div></div>
+    <div class="card"><h3>余额勾稽校验</h3><div id="checks"></div></div>
+  </section>
+
+  <!-- 核销记录 -->
+  <section id="matches" class="panel">
+    <div class="bar">
+      过滤：
+      <select id="mstatus" onchange="loadMatches()">
+        <option value="">全部</option><option value="auto">自动核销</option>
+        <option value="pending">建议待确认</option><option value="confirmed">已确认</option>
+        <option value="cancelled">已撤销</option>
+      </select>
+      <span class="muted">建议核销需人工「确认」后才正式生效；已生效的可「反核销」(留痕不删除)</span>
+    </div>
+    <div id="mtable"></div>
+  </section>
+
+  <!-- 工单 -->
+  <section id="tickets" class="panel">
+    <div class="bar">过滤：
+      <select id="tstatus" onchange="loadTickets()">
+        <option value="">全部</option><option value="待处理">待处理</option>
+        <option value="处理中">处理中</option><option value="待复核">待复核</option>
+        <option value="已结转">已结转</option><option value="已解决">已解决</option>
+      </select>
+    </div>
+    <div id="ttable"></div>
+  </section>
+
+  <!-- 看板 -->
+  <section id="board" class="panel"><div class="card"><h3>工单看板（责任方 × 状态，未解决）</h3><div id="btable"></div></div></section>
+
+  <!-- 导入 -->
+  <section id="import" class="panel">
+    <div class="card">
+      <h3>标准模板导入（CSV / Excel）</h3>
+      <div class="grid2">
+        <div class="imp"><h4>账户主数据</h4><input type="file" id="f_accounts"><button class="sm" onclick="up('accounts','f_accounts')">导入</button></div>
+        <div class="imp"><h4>别名表</h4><input type="file" id="f_aliases"><button class="sm" onclick="up('aliases','f_aliases')">导入</button></div>
+        <div class="imp"><h4>银行流水（当前期间）</h4><input type="file" id="f_bank"><button class="sm" onclick="up('bank','f_bank')">导入</button></div>
+        <div class="imp"><h4>财务凭证（当前期间）</h4><input type="file" id="f_vouchers"><button class="sm" onclick="up('vouchers','f_vouchers')">导入</button></div>
+        <div class="imp"><h4>余额表（当前期间）</h4><input type="file" id="f_balances"><button class="sm" onclick="up('balances','f_balances')">导入</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>真实导出导入（按字段映射，自动提取对账码/转方向）</h3>
+      <div class="muted" style="margin-bottom:8px">映射在 config/mappings.toml 配置；先用「扫描账户」从文件提取账户主数据，再导入明细。</div>
+      <div class="bar">
+        映射 <select id="mapsel"></select>
+        文件 <input type="file" id="f_mapped">
+        类型 <select id="mapkind"><option value="bank">银行流水</option><option value="vouchers">财务凭证</option></select>
+        <button class="sm" onclick="scanAcc()">① 扫描账户</button>
+        <button class="act" onclick="upMapped()">② 按映射导入到当前期间</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 审计 -->
+  <section id="audit" class="panel"><div class="card"><h3>审计留痕（最近 40 条，自动 system / 人工记工号）</h3><div id="atable"></div></div></section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+function P(){return $('period').value;}
+function val(id){return $(id).value.trim();}
+function actor(){return $('actor').value.trim()||'演示员';}
+function toast(m,bad){const t=$('toast');t.textContent=m;t.className='show';t.style.background=bad?'#a33':'#222';setTimeout(()=>t.className='',3500);}
+async function api(path){const r=await fetch(path);if(!r.ok)throw new Error((await r.json()).error||r.status);return r.json();}
+async function post(action,body){const r=await fetch('/api/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});const j=await r.json();if(!r.ok)throw new Error(j.error||'失败');return j;}
+
+function tab(id,btn){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));$(id).classList.add('active');
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
+  if(id==='matches')loadMatches();if(id==='tickets')loadTickets();if(id==='board')loadBoard();if(id==='audit')loadAudit();}
+
+async function boot(){
+  try{const s=await api('/api/state');
+    const sel=$('period');sel.innerHTML='';
+    s.periods.forEach(p=>{const o=document.createElement('option');o.value=p.period;o.textContent=p.period+(p.status==='closed'?'（已关账）':'');sel.appendChild(o);});
+    const ms=$('mapsel');ms.innerHTML='';s.mappings.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;ms.appendChild(o);});
+    if(s.periods.length)reloadAll(); else toast('暂无期间，点右上「加载演示数据」或到「数据导入」开始');
+  }catch(e){toast(e.message,true);}
+}
+function reloadAll(){loadSummary();const a=document.querySelector('.panel.active').id;if(a==='matches')loadMatches();if(a==='tickets')loadTickets();if(a==='board')loadBoard();if(a==='audit')loadAudit();}
+
+async function loadSummary(){
+  if(!P())return;
+  try{const d=await api('/api/summary?period='+encodeURIComponent(P()));
+    $('kpis').innerHTML=[
+      ['银行核销率',d.rate_bank+'%',`${d.matched_bank}/${d.total_bank} 笔`],
+      ['凭证核销率',d.rate_fin+'%',`${d.matched_fin}/${d.total_fin} 行`],
+      ['生效核销',d.auto_confirmed,'笔'],
+      ['建议待确认',d.pending,'笔'],
+      ['未匹配',d.unmatched_bank+' / '+d.unmatched_fin,'银行/凭证'],
+      ['未解决工单',d.open_tickets,'共 '+d.total_tickets+' 张'],
+    ].map(k=>`<div class="kpi"><b>${k[1]}</b><span>${k[0]} · ${k[2]}</span></div>`).join('');
+    let h='<table><tr><th>账号</th><th>对账单期末</th><th>+企业已收银行未收</th><th>−企业已付银行未付</th><th>调节后对账单</th><th>账面期末</th><th>+银行已收企业未收</th><th>−银行已付企业未付</th><th>调节后账面</th><th>容差差额</th><th>未解释差异</th><th>校验</th></tr>';
+    d.statements.forEach(s=>{h+=`<tr><td>${s.account_no}</td>`+(s.has_balance?
+      `<td>${s.stmt_close}</td><td>${s.fin_in_pending}</td><td>${s.fin_out_pending}</td><td>${s.adjusted_stmt}</td><td>${s.ledger_close}</td><td>${s.bank_in_unbooked}</td><td>${s.bank_out_unbooked}</td><td>${s.adjusted_ledger}</td><td>${s.tolerance_total}</td><td>${s.residual}</td><td>${s.balanced?'<span class=ok>✓ 平衡</span>':'<span class=bad>✗ 未解释</span>'}</td>`
+      :`<td colspan=11 class=muted>未导入余额表</td>`)+'</tr>';});
+    $('stmt').innerHTML=h+'</table>';
+    $('checks').innerHTML=d.balance_checks.length?('<table><tr><th>账号</th><th>侧</th><th>应等于期末</th><th>实际期末</th><th>结果</th></tr>'+
+      d.balance_checks.map(r=>`<tr><td>${r.account_no}</td><td>${r.side==='bank'?'银行对账单':'账面'}</td><td>${r.expected}</td><td>${r.actual}</td><td>${r.ok?'<span class=ok>✓</span>':'<span class=bad>✗ 不平</span>'}</td></tr>`).join('')+'</table>')
+      :'<span class=muted>未导入余额表，无法勾稽</span>';
+  }catch(e){toast(e.message,true);}
+}
+
+async function loadMatches(){
+  if(!P())return;
+  try{const rows=await api('/api/matches?period='+encodeURIComponent(P())+'&status='+$('mstatus').value);
+    let h='<table><tr><th>ID</th><th>方式</th><th>置信度</th><th>状态</th><th>对账码</th><th>银行合计</th><th>凭证合计</th><th>差额</th><th>说明</th><th>操作</th></tr>';
+    rows.forEach(m=>{let btn='';
+      if(m.status==='pending')btn=`<button class="sm ok" onclick="confirmM(${m.id})">确认</button> <button class="sm bad" onclick="rejectM(${m.id})">退回</button>`;
+      else if(m.status==='auto'||m.status==='confirmed')btn=`<button class="sm bad" onclick="unmatchM(${m.id})">反核销</button>`;
+      h+=`<tr><td>${m.id}</td><td>${m.method}</td><td>${m.confidence}</td><td><span class="tag ${m.status}">${m.status_label}</span></td><td>${m.recon_code}</td><td>${m.bank_total}</td><td>${m.fin_total}</td><td>${m.diff}</td><td class=muted>${m.explanation}</td><td>${btn}</td></tr>`;});
+    $('mtable').innerHTML=rows.length?h+'</table>':'<p class=muted>无记录</p>';
+  }catch(e){toast(e.message,true);}
+}
+async function confirmM(id){try{toast((await post('confirm',{id,by:actor()})).msg);loadMatches();loadSummary();}catch(e){toast(e.message,true);}}
+async function rejectM(id){const r=prompt('退回原因？');if(r===null)return;try{toast((await post('reject',{id,by:actor(),reason:r})).msg);loadMatches();loadSummary();}catch(e){toast(e.message,true);}}
+async function unmatchM(id){const r=prompt('反核销原因？(审计必填)');if(!r)return;try{toast((await post('unmatch',{id,by:actor(),reason:r})).msg);loadMatches();loadSummary();}catch(e){toast(e.message,true);}}
+
+const NEXT={'待派单':['待处理'],'待处理':['处理中','已结转'],'处理中':['待复核','已结转'],'待复核':['已解决','处理中'],'已结转':['已解决']};
+async function loadTickets(){
+  if(!P())return;
+  try{const rows=await api('/api/tickets?period='+encodeURIComponent(P())+'&status='+$('tstatus').value);
+    let h='<table><tr><th>ID</th><th>状态</th><th>原因</th><th>责任方</th><th>建议动作</th><th>差异金额</th><th>对账码</th><th>AI 归因</th><th>流转</th></tr>';
+    rows.forEach(t=>{let mv=(NEXT[t.status]||[]).map(s=>`<button class="sm" onclick="moveT(${t.id},'${s}')">${s}</button>`).join(' ');
+      h+=`<tr><td>${t.id}</td><td>${t.status}</td><td>${t.reason_label}</td><td>${t.assignee}</td><td>${t.action}</td><td>${t.diff}</td><td>${t.recon_code}</td><td class=muted>${t.ai_note||t.resolved}</td><td>${mv}</td></tr>`;});
+    $('ttable').innerHTML=rows.length?h+'</table>':'<p class=muted>无工单</p>';
+  }catch(e){toast(e.message,true);}
+}
+async function moveT(id,to){let note='';if(to==='处理中'){note=prompt('退回原因？')||'';if(!note){toast('退回必填原因',true);return;}}
+  try{toast((await post('ticket_move',{id,to,by:actor(),note})).msg);loadTickets();}catch(e){toast(e.message,true);}}
+
+async function loadBoard(){if(!P())return;try{const rows=await api('/api/board?period='+encodeURIComponent(P()));
+  $('btable').innerHTML=rows.length?('<table><tr><th>责任方</th><th>状态</th><th>数量</th><th>差异合计</th></tr>'+rows.map(r=>`<tr><td>${r.assignee}</td><td>${r.status}</td><td>${r.count}</td><td>${r.amount}</td></tr>`).join('')+'</table>'):'<p class=muted>无未解决工单</p>';}catch(e){toast(e.message,true);}}
+
+async function loadAudit(){try{const rows=await api('/api/audit?limit=40');
+  $('atable').innerHTML='<table><tr><th>时间</th><th>操作人</th><th>动作</th><th>对象</th><th>详情</th></tr>'+rows.map(r=>`<tr><td>${r.at}</td><td>${r.actor}</td><td>${r.action}</td><td>${r.object_type} ${r.object_id}</td><td class=muted>${(r.detail||'').slice(0,80)}</td></tr>`).join('')+'</table>';}catch(e){toast(e.message,true);}}
+
+async function op(action,body){try{body.by=actor();const j=await post(action,body);
+  let m=j.msg;if(j.stats)m+=`（核销 ${j.stats.matched_bank||0} 银行行）`;toast(m);reloadAll();}catch(e){toast(e.message,true);}}
+async function openPeriod(){const p=val('newperiod');if(!p){toast('请输入期间',true);return;}try{toast((await post('period_open',{period:p,by:actor()})).msg);await boot();$('period').value=p;reloadAll();}catch(e){toast(e.message,true);}}
+async function seedDemo(){try{toast('加载中…');toast((await post('seed_demo',{})).msg);await boot();}catch(e){toast(e.message,true);}}
+
+async function up(kind,fileId){const f=$(fileId).files[0];if(!f){toast('请选择文件',true);return;}
+  try{const buf=await f.arrayBuffer();const u='/api/upload?kind='+kind+'&period='+encodeURIComponent(P())+'&filename='+encodeURIComponent(f.name);
+    const r=await fetch(u,{method:'POST',body:buf});const j=await r.json();if(!r.ok)throw new Error(j.error);toast(j.msg);reloadAll();}catch(e){toast(e.message,true);}}
+async function upMapped(){const f=$('f_mapped').files[0];if(!f){toast('请选择文件',true);return;}
+  try{const buf=await f.arrayBuffer();const u='/api/upload?kind='+$('mapkind').value+'&period='+encodeURIComponent(P())+'&mapping='+$('mapsel').value+'&filename='+encodeURIComponent(f.name);
+    const r=await fetch(u,{method:'POST',body:buf});const j=await r.json();if(!r.ok)throw new Error(j.error);toast(j.msg);reloadAll();}catch(e){toast(e.message,true);}}
+async function scanAcc(){const f=$('f_mapped').files[0];if(!f){toast('请选择文件',true);return;}
+  try{const buf=await f.arrayBuffer();const u='/api/scan_accounts?mapping='+$('mapsel').value+'&filename='+encodeURIComponent(f.name);
+    const r=await fetch(u,{method:'POST',body:buf});const j=await r.json();if(!r.ok)throw new Error(j.error);toast(j.msg);}catch(e){toast(e.message,true);}}
+
+boot();
+</script>
+</body>
+</html>

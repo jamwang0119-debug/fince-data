@@ -20,5 +20,8 @@ fince-recon = "fince_recon.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+fince_recon = ["static/*.html"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
